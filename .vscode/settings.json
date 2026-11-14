@@ -1,0 +1,7 @@
+{
+    "makefile.compileCommandsPath": "out/compile_commands.json",
+    "clangd.arguments": [
+        "--compile-commands-dir=out",
+    ],
+    "makefile.configureOnOpen": true,
+}

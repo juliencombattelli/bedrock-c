@@ -1,0 +1,4 @@
+If:
+  PathMatch: ["opt[0-9]*\\.h"]
+CompileFlags:
+  Add: [-DOPT_IMPLEMENTATION, -DOPT_TESTING]
