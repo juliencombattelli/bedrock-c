@@ -3,8 +3,10 @@
 #include <opt.h>
 
 #include <limits.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -28,65 +30,53 @@ static OptTestData_ *opt_current_test_ = NULL;
     }                                                       \
     static void opt__##test_name##__impl(void)
 
+// OPT_EXPECT_* macros evaluate to true on success, false on failure, so a check
+// can guard the next one: `if (OPT_EXPECT_NE(s, NULL, ...)) OPT_EXPECT_STREQ(s, ...);`
+// The `!(check) ? fail : true` shape keeps GCC's -Wunused-value quiet when a check
+// is used as a statement. A bare `A && B;` statement still warns: use `if (A) B;`.
+static bool opt__expect_failed(const char *file, int line, const char *format, ...)
+{
+    opt_current_test_->success = false;
+    fprintf(stderr, "%s:%d: ", file, line);
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    return false;
+}
+
 #define OPT_EXPECT_STREQ(expected, actual) \
-    do { \
-        if (!streq(expected, actual)) { \
-            opt_current_test_->success = false; \
-            fprintf(stderr, \
-                    "%s:%d: OPT_EXPECT_STREQ failed\n" \
-                    "    expected: %s = \"%s\"\n" \
-                    "    actual:   %s = \"%s\"\n", \
-                    __FILE__, __LINE__, \
-                    #expected, (expected), \
-                    #actual, (actual)); \
-        } \
-    } while (0)
+    (!(strcmp((expected), (actual)) == 0) ? opt__expect_failed(__FILE__, __LINE__, \
+        "OPT_EXPECT_STREQ failed\n" \
+        "    expected: %s = \"%s\"\n" \
+        "    actual:   %s = \"%s\"\n", \
+        #expected, (expected), \
+        #actual, (actual)) : true)
 
 #define OPT_EXPECT_ENUMEQ(expected, actual, enum_to_str_fn) \
-    do { \
-        if ((expected) != (actual) || enum_to_str_fn((expected)) == NULL || enum_to_str_fn((actual)) == NULL) { \
-            opt_current_test_->success = false; \
-            fprintf(stderr, \
-                    "%s:%d: OPT_EXPECT_ENUMEQ failed\n" \
-                    "    expected: %s = %d (\"%s\")\n" \
-                    "    actual:   %s = %d (\"%s\")\n", \
-                    __FILE__, __LINE__, \
-                    #expected, (expected), enum_to_str_fn((expected)), \
-                    #actual, (actual), enum_to_str_fn((actual))); \
-        } \
-    } while (0)
+    (!((expected) == (actual) && enum_to_str_fn((expected)) != NULL && enum_to_str_fn((actual)) != NULL) \
+        ? opt__expect_failed(__FILE__, __LINE__, \
+        "OPT_EXPECT_ENUMEQ failed\n" \
+        "    expected: %s = %d (\"%s\")\n" \
+        "    actual:   %s = %d (\"%s\")\n", \
+        #expected, (int)(expected), enum_to_str_fn((expected)), \
+        #actual, (int)(actual), enum_to_str_fn((actual))) : true)
 
 #define OPT_EXPECT_EQ(expected, actual, type, format) \
-    do { \
-        type _expected = (expected); \
-        type _actual = (actual); \
-        if (!(_expected == _actual)) { \
-            opt_current_test_->success = false; \
-            fprintf(stderr, \
-                    "%s:%d: OPT_EXPECT_EQ failed\n" \
-                    "    expected: %s = " format "\n" \
-                    "    actual:   %s = " format "\n", \
-                    __FILE__, __LINE__, \
-                    #expected, _expected, \
-                    #actual, _actual); \
-        } \
-    } while (0)
+    (!((type)(expected) == (type)(actual)) ? opt__expect_failed(__FILE__, __LINE__, \
+        "OPT_EXPECT_EQ failed\n" \
+        "    expected: %s = " format "\n" \
+        "    actual:   %s = " format "\n", \
+        #expected, (type)(expected), \
+        #actual, (type)(actual)) : true)
 
 #define OPT_EXPECT_NE(expected, actual, type, format) \
-    do { \
-        type _expected = (expected); \
-        type _actual = (actual); \
-        if (_expected == _actual) { \
-            opt_current_test_->success = false; \
-            fprintf(stderr, \
-                    "%s:%d: OPT_EXPECT_NE failed\n" \
-                    "    expected: %s = " format "\n" \
-                    "    actual:   %s = " format "\n", \
-                    __FILE__, __LINE__, \
-                    #expected, _expected, \
-                    #actual, _actual); \
-        } \
-    } while (0)
+    (!((type)(expected) != (type)(actual)) ? opt__expect_failed(__FILE__, __LINE__, \
+        "OPT_EXPECT_NE failed\n" \
+        "    expected: %s = " format "\n" \
+        "    actual:   %s = " format "\n", \
+        #expected, (type)(expected), \
+        #actual, (type)(actual)) : true)
 
 static bool streq(const char *s1, const char *s2)
 {
@@ -155,14 +145,17 @@ OPT_TEST(test_gnu)
     }
 
     OPT_EXPECT_EQ(opts.command, CMD_CREATE, int, "%d");
-    OPT_EXPECT_STREQ(opts.change_to_directory, "project");
-    OPT_EXPECT_STREQ(opts.file, "archive.tar.gz");
+    if (OPT_EXPECT_NE(opts.change_to_directory, NULL, void*, "%p"))
+        OPT_EXPECT_STREQ(opts.change_to_directory, "project");
+    if (OPT_EXPECT_NE(opts.file, NULL, void*, "%p"))
+        OPT_EXPECT_STREQ(opts.file, "archive.tar.gz");
     OPT_EXPECT_EQ(opts.compression_method, COMP_GZIP, int, "%d");
     OPT_EXPECT_EQ(opts.jobs, 2, int, "%d");
     OPT_EXPECT_EQ(opts.verbose, true, bool, "%d");
-    OPT_EXPECT_EQ(opts.item_count, 2, int, "%d");
-    OPT_EXPECT_STREQ(opts.items[0], "foo");
-    OPT_EXPECT_STREQ(opts.items[1], "bar");
+    if (OPT_EXPECT_EQ(opts.item_count, 2, int, "%d")) {
+        OPT_EXPECT_STREQ(opts.items[0], "foo");
+        OPT_EXPECT_STREQ(opts.items[1], "bar");
+    }
 }
 
 #define OPT_TESTS \
