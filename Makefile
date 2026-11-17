@@ -1,7 +1,7 @@
 # Options overridable from environment or command line
 CC          = $(WRAPPER) gcc
 CPPFLAGS    = -Iinclude
-CFLAGS      = -Wall -Wextra -Wpedantic -g -O0 -std=c11
+CFLAGS      = -Wall -Wextra -Wpedantic -Wconversion -g -O0 -std=c11
 LDFLAGS     =
 SANITIZE    = 1
 V           = 0
