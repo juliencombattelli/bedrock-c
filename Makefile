@@ -20,7 +20,7 @@ endif
 OBJ_DIR := $(OUT_DIR)/objs
 BIN_DIR := $(OUT_DIR)/tests
 
-MODULES := opt
+MODULES := opt brtest
 
 TEST_SRCS := $(MODULES:%=tests/test_%.c)
 TESTS     := $(MODULES:%=$(BIN_DIR)/test_%)
